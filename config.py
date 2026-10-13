@@ -1,4 +1,4 @@
-"""Configuration for the RAG Agent.
+"""Configuration for the RAG Agent and Telegram bot.
 
 All sensitive values are loaded from environment variables / .env file.
 """
@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
-from typing import Optional
 
 from dotenv import load_dotenv
 
@@ -50,21 +49,33 @@ class PineconeConfig:
     )
 
 
+@dataclass(frozen=True)
+class TelegramConfig:
+    """Telegram bot credentials."""
+
+    bot_token: str = field(
+        default_factory=lambda: os.getenv("TELEGRAM_BOT_TOKEN", "")
+    )
+
+
 @dataclass
 class RAGAgentConfig:
     """Aggregate configuration for the RAG agent."""
 
     openai: OpenAIConfig = field(default_factory=OpenAIConfig)
     pinecone: PineconeConfig = field(default_factory=PineconeConfig)
+    telegram: TelegramConfig = field(default_factory=TelegramConfig)
     chunk_size: int = 1000
     chunk_overlap: int = 200
     retrieval_k: int = 4
     system_prompt: str = (
-        "You are a helpful RAG assistant. "
+        "You are a helpful RAG assistant and personal smart helper. "
         "Use the vector knowledge base to answer questions accurately. "
-        "When a URL is provided, ingest its content first, then answer. "
+        "When user memory facts are provided, personalize answers accordingly. "
+        "When a URL is provided, its content is already ingested — use it. "
         "Use available tools when external API data is required. "
-        "Always ground answers in retrieved context when possible."
+        "Always ground answers in retrieved context when possible. "
+        "Reply in the same language the user writes in."
     )
 
     def validate(self) -> None:
@@ -73,3 +84,9 @@ class RAGAgentConfig:
             raise ValueError("OPENAI_API_KEY is not set")
         if not self.pinecone.api_key:
             raise ValueError("PINECONE_API_KEY is not set")
+
+    def validate_telegram(self) -> None:
+        """Raise ValueError if Telegram token is missing."""
+        self.validate()
+        if not self.telegram.bot_token:
+            raise ValueError("TELEGRAM_BOT_TOKEN is not set")

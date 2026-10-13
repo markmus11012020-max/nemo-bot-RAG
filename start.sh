@@ -12,7 +12,7 @@ cd "$PROJECT_DIR"
 VENV_DIR="${PROJECT_DIR}/.venv"
 PYTHON_EXE="${VENV_DIR}/bin/python"
 PIP_EXE="${VENV_DIR}/bin/pip"
-MAIN_MODULE="rag_agent.py"
+MAIN_MODULE="bot.py"
 REQUIREMENTS="requirements.txt"
 PID_FILE="${PROJECT_DIR}/.rag_agent.pid"
 
@@ -145,7 +145,7 @@ echo
 # ----------------------------------------------------------
 #  4. START project
 # ----------------------------------------------------------
-echo "[4/4] Starting RAG Agent..."
+echo "[4/4] Starting Telegram RAG Bot..."
 echo "------------------------------------------------------------"
 
 if [[ ! -f "${PROJECT_DIR}/${MAIN_MODULE}" ]]; then

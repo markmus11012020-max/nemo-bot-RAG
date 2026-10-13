@@ -1,100 +1,82 @@
-# RAG Agent
+# Nemo Bot RAG — умный Telegram-помощник
 
-Умный RAG-агент на базе **LangChain Deep Agents** + **Pinecone**.
+RAG-агент + Telegram (PyTelegramBotAPI) + Pinecone + память о пользователе.
 
 ## Возможности
 
-1. **Векторная база Pinecone** — хранение и семантический поиск эмбеддингов.
-2. **Tool-функции** (`@tool`) — заглушки для будущих внешних API.
-3. **Чтение URL** — эвристическое определение ссылки в сообщении → парсинг страницы → чанки → эмбеддинги → запись в Pinecone → ответ на вопрос.
-4. Готов к подключению к Telegram-боту (пока только класс).
+| Функция | Как работает |
+|---------|----------------|
+| **Ответы на вопросы** | Поиск в Pinecone → LLM (OpenAI-compatible `base_url`) |
+| **Чтение URL** | Эвристика / `/ingest` → HTML → чанки → эмбеддинги → Pinecone |
+| **Память о пользователе** | Эвристики (имя, город, работа, «запомни…») → эмбеддинги |
+| **Добавление данных** | Ссылки, `/remember`, `/ingest`, обычный текст с фактами |
+| **Tools** | `@tool`-заглушки под будущие внешние API |
 
 ## Структура
 
 ```
 rag_agent/
-├── __init__.py
-├── config.py          # Конфигурация (env / .env)
-├── tools.py           # @tool заглушки
-├── url_ingestor.py    # Парсинг URL, чанкинг
-├── rag_agent.py       # Основной класс RAGAgent (OOP)
+├── bot.py            # Telegram-интерфейс (точка входа для продакшена)
+├── rag_agent.py      # OOP RAG-агент + self-test
+├── memory.py         # эвристическая память пользователя
+├── url_ingestor.py   # парсинг HTML-ссылок
+├── tools.py          # @tool заглушки
+├── config.py         # env-конфиг
+├── start.bat / start.sh
 ├── requirements.txt
-├── .env.example
-└── README.md
+└── .env.example
 ```
 
 ## Быстрый старт
 
 ```bash
-cd rag_agent
+cp .env.example .env
+# Заполните: OPENAI_*, PINECONE_*, TELEGRAM_BOT_TOKEN
+
+# Windows
+start.bat
+
+# Linux / macOS
+bash start.sh
+```
+
+Или вручную:
+
+```bash
 python -m venv .venv
 source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-
-cp .env.example .env
-# Заполните OPENAI_API_KEY, OPENAI_BASE_URL, PINECONE_API_KEY и т.д.
+python bot.py
 ```
 
-### Проверка подключения
+Токен бота: [@BotFather](https://t.me/BotFather) → `/newbot`.
+
+## Команды в Telegram
+
+| Команда | Описание |
+|---------|----------|
+| `/start` | Приветствие |
+| `/help` | Справка |
+| `/remember <текст>` | Явно сохранить факт |
+| `/ingest <url>` | Прочитать страницу в базу |
+| `/status` | Проверка Pinecone |
+
+Примеры сообщений:
+
+- `Меня зовут Иван, живу в Казани`
+- `Запомни: предпочитаю краткие ответы`
+- `Прочитай https://docs.langchain.com и кратко расскажи`
+- `Что такое RAG?`
+
+## Self-test агента (без Telegram)
 
 ```bash
 python rag_agent.py
 ```
 
-Скрипт проверит соединение с Pinecone и эмбеддинг-эндпоинтом, выполнит тестовый поиск.
+## Внешний base_url OpenAI
 
-### Использование в коде
-
-```python
-from rag_agent import RAGAgent
-
-agent = RAGAgent()
-
-# Обычный вопрос (поиск в векторной БД)
-answer = agent.ask("Что такое RAG?")
-
-# Сообщение со ссылкой — страница будет прочитана и проиндексирована
-answer = agent.ask(
-    "Прочитай эту страницу и кратко расскажи о чём она: "
-    "https://docs.langchain.com/oss/python/deepagents/rag"
-)
-
-# Прямой поиск
-docs = agent.search("retrieval augmented generation", k=3)
-```
-
-## Внешний base_url для OpenAI
-
-В `.env`:
-
-```
+```env
 OPENAI_BASE_URL=https://your-proxy.example.com/v1
 OPENAI_API_KEY=sk-...
-OPENAI_MODEL=gpt-4o-mini
-OPENAI_EMBEDDING_MODEL=text-embedding-3-small
 ```
-
-Класс использует `base_url` и для чата, и для эмбеддингов.
-
-## Интеграция с Telegram (позже)
-
-```python
-# В хендлере бота:
-from rag_agent import RAGAgent
-
-agent = RAGAgent()  # один раз при старте
-
-async def handle_message(update, context):
-    text = update.message.text
-    reply = agent.ask(text)
-    await update.message.reply_text(reply)
-```
-
-## Зависимости
-
-См. `requirements.txt`. Основные:
-
-- `deepagents`
-- `langchain`, `langchain-openai`, `langchain-pinecone`
-- `pinecone`
-- `beautifulsoup4`, `lxml`, `requests`
