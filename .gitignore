@@ -43,8 +43,9 @@ htmlcov/
 Thumbs.db
 
 # Runtime
-.rag_agent.pid
+.nemo_bot.pid
 *.log
+test_syntax.bat
 
 # Jupyter
 .ipynb_checkpoints/

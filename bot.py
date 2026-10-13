@@ -10,11 +10,23 @@ Capabilities exposed to the user:
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import os
 import sys
+import tempfile
 import threading
 from typing import Optional
+
+try:  # POSIX advisory file locking
+    import fcntl
+except ImportError:  # pragma: no cover - Windows
+    fcntl = None
+
+try:  # Windows advisory file locking
+    import msvcrt
+except ImportError:  # pragma: no cover - POSIX
+    msvcrt = None
 
 import telebot
 from telebot import types
@@ -29,6 +41,63 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
 )
 logger = logging.getLogger("bot")
+
+
+# ---------------------------------------------------------------------------
+# Single-instance lock
+# ---------------------------------------------------------------------------
+
+class _SingleInstanceLock:
+    """
+    Cross-platform advisory lock ensuring only one bot process runs per token.
+
+    Telegram rejects concurrent ``getUpdates`` for the same bot token with
+    HTTP 409 ("terminated by other getUpdates request"). This lock makes a
+    second instance exit immediately with a clear message instead of fighting
+    the first one over the update stream.
+    """
+
+    def __init__(self, name: str) -> None:
+        import os as _os
+
+        self._path = _os.path.join(tempfile.gettempdir(), f"{name}.lock")
+        self._fh = None
+
+    def acquire(self) -> bool:
+        """Try to take the lock. Returns False if another instance holds it."""
+        self._fh = open(self._path, "w")
+        try:
+            if fcntl is not None:  # POSIX
+                fcntl.flock(self._fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            elif msvcrt is not None:  # Windows
+                msvcrt.locking(self._fh.fileno(), msvcrt.LK_NBLCK, 1)
+            return True
+        except (OSError, IOError):
+            self._fh.close()
+            self._fh = None
+            return False
+
+    def release(self) -> None:
+        if self._fh is None:
+            return
+        try:
+            if fcntl is not None:
+                fcntl.flock(self._fh, fcntl.LOCK_UN)
+            elif msvcrt is not None:
+                self._fh.seek(0)
+                msvcrt.locking(self._fh.fileno(), msvcrt.LK_UNLCK, 1)
+        except (OSError, IOError):
+            pass
+        finally:
+            self._fh.close()
+            self._fh = None
+
+
+def _instance_lock_name(token: str) -> str:
+    """Stable, per-token lock file name (does not leak the token itself)."""
+    digest = hashlib.sha256(token.encode()).hexdigest()[:16]
+    return f"nemo-bot-rag-{digest}"
+
 
 # ---------------------------------------------------------------------------
 # Config helpers
@@ -253,9 +322,34 @@ class TelegramRAGBot:
     # ------------------------------------------------------------------
 
     def run(self) -> None:
-        logger.info("Starting Telegram bot polling...")
-        # infinity_polling handles network blips
-        self.bot.infinity_polling(timeout=30, long_polling_timeout=25)
+        # Ensure only one instance polls this token; a duplicate would keep
+        # triggering Telegram's 409 "terminated by other getUpdates request".
+        lock = _SingleInstanceLock(_instance_lock_name(self.token))
+        if not lock.acquire():
+            logger.error(
+                "Another instance of this bot is already running for this token. "
+                "Only one poller is allowed by Telegram (error 409). "
+                "Stop the other process and try again."
+            )
+            print(
+                "[FAIL] Bot is already running (another instance holds the lock). "
+                "Stop it first — Telegram allows only one getUpdates poller per token.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+
+        try:
+            # A leftover webhook also makes getUpdates fail with 409.
+            try:
+                self.bot.delete_webhook(drop_pending_updates=True)
+            except Exception:  # noqa: BLE001
+                logger.warning("Could not delete webhook before polling; continuing.")
+
+            logger.info("Starting Telegram bot polling...")
+            # infinity_polling handles network blips
+            self.bot.infinity_polling(timeout=30, long_polling_timeout=25)
+        finally:
+            lock.release()
 
 
 def main() -> None:

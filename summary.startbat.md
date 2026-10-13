@@ -582,6 +582,6 @@ exit /b %ERRORLEVEL%
 
 ## 10. Связанные файлы
 
-- `start.sh` — bash-версия для Linux/macOS/WSL (та же 4-фазная структура).
-- `.gitignore` — должен содержать `.venv/`, `__pycache__/`, `*.pyc`, `.rag_agent.pid`, `deploy.log`.
+- `bot.py` — точка входа проекта (задаётся через `MAIN_MODULE` в блоке Configuration).
+- `.gitignore` — должен содержать `.venv/`, `__pycache__/`, `*.pyc`, `.nemo_bot.pid`, `deploy.log`.
 - `requirements.txt` — единственный источник правды о зависимостях.

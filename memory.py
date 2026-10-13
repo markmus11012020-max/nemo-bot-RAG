@@ -78,7 +78,7 @@ def extract_facts(text: str) -> List[tuple[str, str]]:
         for kw in REMEMBER_KEYWORDS:
             # Remove the keyword, keep the rest as a note
             cleaned = re.sub(re.escape(kw), "", cleaned, flags=re.I)
-        cleaned = cleaned.strip(" :,—\-")
+        cleaned = cleaned.strip(r" :,—\-")
         if len(cleaned) >= 5:
             key = f"note:{cleaned.lower()[:80]}"
             if key not in seen:
